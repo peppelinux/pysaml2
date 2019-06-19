@@ -741,6 +741,13 @@ class MetaDataExtern(InMemoryMetaData):
         # No cert is only an error if the metadata is unsigned
         self.cert = cert
 
+        # adding https tls/ssl check
+        self.disable_ssl_certificate_validation = kwargs.get('disable_ssl_certificate_validation', False)
+        self.ca_cert = kwargs.get('ca_cert', None)
+        self.ssl_verification = True if not self.disable_ssl_certificate_validation else False
+        if self.ca_cert:
+            self.ssl_verification = self.ca_cert
+
         self.security = security
         self.http = http
 
@@ -749,7 +756,9 @@ class MetaDataExtern(InMemoryMetaData):
         If the fingerprint is known the file will be checked for
         compliance before it is imported.
         """
-        response = self.http.send(self.url)
+
+        response = self.http.send(self.url,
+                                  verify=self.ssl_verification)
         if response.status_code == 200:
             _txt = response.content
             return self.parse_and_check_signature(_txt)
@@ -917,7 +926,7 @@ class MetadataStore(MetaData):
             if "url" not in kwargs:
                 raise ValueError("Remote metadata must be structured as a dict containing the key 'url'")
             key = kwargs["url"]
-            for _key in ["node_name", "check_validity"]:
+            for _key in ["node_name", "check_validity", "disable_ssl_certificate_validation", "ca_cert"]:
                 try:
                     _args[_key] = kwargs[_key]
                 except KeyError:
@@ -925,7 +934,6 @@ class MetadataStore(MetaData):
 
             if "cert" not in kwargs:
                 kwargs["cert"] = ""
-
             _md = MetaDataExtern(self.attrc,
                                  kwargs["url"], self.security,
                                  kwargs["cert"], self.http, **_args)
@@ -1001,6 +1009,14 @@ class MetadataStore(MetaData):
                             self.metadata[_fil] = _md
                             if _md.to_old:
                                 self.to_old[_fil] = _md.to_old
+                        return
+
+                    if MDloader == MetaDataMDX:
+                        # Separately handle MetaDataMDX
+                        # TODO
+                        _md = MetaDataMDX(key['url'],
+                                          **key['kwargs'])
+                        _md.load()
                         return
 
                     if len(key) == 2:
