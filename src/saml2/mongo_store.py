@@ -1,3 +1,4 @@
+import datetime
 from hashlib import sha1
 import logging
 
@@ -5,6 +6,8 @@ from pymongo import MongoClient
 from pymongo.mongo_replica_set_client import MongoReplicaSetClient
 import pymongo.uri_parser
 import pymongo.errors
+from saml2.saml import NAMEID_FORMAT_PERSISTENT
+
 from saml2.eptid import Eptid
 from saml2.mdstore import InMemoryMetaData
 from saml2.mdstore import metadata_modules
@@ -163,6 +166,23 @@ class IdentMDB(IdentDB):
             return item[self.mdb.primary_key]
         return None
 
+    def match_local_id(self, userid, sp_name_qualifier, name_qualifier):
+        """
+        Match a local persistent identifier.
+
+        Look for an existing persistent NameID matching userid,
+        sp_name_qualifier and name_qualifier.
+        """
+        filter = {
+            "name_id.sp_name_qualifier": sp_name_qualifier,
+            "name_id.name_qualifier": name_qualifier,
+            "name_id.format": NAMEID_FORMAT_PERSISTENT,
+        }
+        res = self.mdb.get(value=userid, **filter)
+        if not res:
+            return None
+        return from_dict(res[0]["name_id"], ONTS, True)
+
     def remove_remote(self, name_id):
         cnid = to_dict(name_id, MMODS, True)
         self.mdb.remove(name_id=cnid)
@@ -192,6 +212,9 @@ class MDB(object):
         else:
             doc = {}
         doc.update(kwargs)
+        # Add timestamp to all documents to allow external garbage collecting
+        if "created_at" not in doc:
+            doc["created_at"] = datetime.datetime.utcnow()
         _ = self.db.insert(doc)
 
     def get(self, value=None, **kwargs):

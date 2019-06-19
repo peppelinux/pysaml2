@@ -342,6 +342,10 @@ class Base(Entity):
                     # If no nameid_format has been set in the configuration
                     # or passed in then transient is the default.
                     if nameid_format is None:
+                        # SAML 2.0 errata says AllowCreate MUST NOT be used for
+                        # transient ids - to make a conservative change this is
+                        # only applied for the default cause
+                        allow_create = None
                         nameid_format = NAMEID_FORMAT_TRANSIENT
 
                     # If a list has been configured or passed in choose the
@@ -370,13 +374,12 @@ class Base(Entity):
         except KeyError:
             nsprefix = None
 
-        try:
-            force_authn = kwargs['force_authn']
-        except KeyError:
-            force_authn = self.config.getattr('force_authn', 'sp')
-        finally:
-            if force_authn:
-                args['force_authn'] = 'true'
+        force_authn = (
+            kwargs.get("force_authn")
+            or self.config.getattr('force_authn', 'sp')
+        )
+        if str(force_authn).lower() == 'true':
+            args['force_authn'] = 'true'
 
         conf_sp_type = self.config.getattr('sp_type', 'sp')
         conf_sp_type_in_md = self.config.getattr('sp_type_in_metadata', 'sp')
@@ -912,28 +915,21 @@ class Base(Entity):
         :return: A URL
         """
 
-        args = {"entityID": entity_id}
-        for key in ["policy", "returnIDParam"]:
-            try:
-                args[key] = kwargs[key]
-            except KeyError:
-                pass
+        args = {
+            "entityID": entity_id,
+            "policy": kwargs.get("policy"),
+            "returnIDParam": kwargs.get("returnIDParam"),
+            "return": kwargs.get("return_url") or kwargs.get("return"),
+            "isPassive": (
+                None
+                if "isPassive" not in kwargs.keys()
+                else "true"
+                if kwargs.get("isPassive")
+                else "false"
+            ),
+        }
 
-        try:
-            args["return"] = kwargs["return_url"]
-        except KeyError:
-            try:
-                args["return"] = kwargs["return"]
-            except KeyError:
-                pass
-
-        if "isPassive" in kwargs:
-            if kwargs["isPassive"]:
-                args["isPassive"] = "true"
-            else:
-                args["isPassive"] = "false"
-
-        params = urlencode(args)
+        params = urlencode({k: v for k, v in args.items() if v})
         return "%s?%s" % (url, params)
 
     @staticmethod
