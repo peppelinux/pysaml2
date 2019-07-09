@@ -30,7 +30,7 @@ from saml2.soap import make_soap_enveloped_saml_thingy
 from saml2 import BINDING_HTTP_POST
 from saml2 import BINDING_HTTP_REDIRECT
 
-from py.test import raises
+from pytest import raises
 from pathutils import full_path
 import saml2.xmldsig as ds
 
@@ -220,8 +220,8 @@ class TestServer1():
             binding, "%s" % authn_request, "http://www.example.com", "abcd")
         _dict = parse_qs(htargs["headers"][0][1].split('?')[1])
         print(_dict)
-        raises(OtherError, self.server.parse_authn_request,
-               _dict["SAMLRequest"][0], binding)
+        with raises(OtherError):
+            self.server.parse_authn_request(_dict["SAMLRequest"][0], binding)
 
     def test_parse_faulty_request_to_err_status(self):
         req_id, authn_request = self.client.create_authn_request(
@@ -267,7 +267,7 @@ class TestServer1():
         assert resp_args["destination"] == "http://lingon.catalogix.se:8087/"
         assert resp_args["in_response_to"] == "id1"
         name_id_policy = resp_args["name_id_policy"]
-        assert _eq(name_id_policy.keyswv(), ["format", "allow_create"])
+        assert _eq(name_id_policy.keyswv(), ["format"])
         assert name_id_policy.format == saml.NAMEID_FORMAT_TRANSIENT
         assert resp_args[
                    "sp_entity_id"] == "urn:mace:example.com:saml:roland:sp"
@@ -1294,8 +1294,8 @@ class TestServer1NonAsciiAva():
             binding, "%s" % authn_request, "http://www.example.com", "abcd")
         _dict = parse_qs(htargs["headers"][0][1].split('?')[1])
         print(_dict)
-        raises(OtherError, self.server.parse_authn_request,
-               _dict["SAMLRequest"][0], binding)
+        with raises(OtherError):
+            self.server.parse_authn_request(_dict["SAMLRequest"][0], binding)
 
     def test_parse_faulty_request_to_err_status(self):
         req_id, authn_request = self.client.create_authn_request(
@@ -1341,7 +1341,7 @@ class TestServer1NonAsciiAva():
         assert resp_args["destination"] == "http://lingon.catalogix.se:8087/"
         assert resp_args["in_response_to"] == "id1"
         name_id_policy = resp_args["name_id_policy"]
-        assert _eq(name_id_policy.keyswv(), ["format", "allow_create"])
+        assert _eq(name_id_policy.keyswv(), ["format"])
         assert name_id_policy.format == saml.NAMEID_FORMAT_TRANSIENT
         assert resp_args[
                    "sp_entity_id"] == "urn:mace:example.com:saml:roland:sp"

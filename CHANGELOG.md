@@ -1,5 +1,38 @@
 # Changelog
 
+## 4.8.0 (2019-07-08)
+
+- Refactor the way ForceAuthn is set: check for "true" and "1"
+- Allow to set NameQualifier and SPNameQualifier attributes for ePTID
+- Parse assertions with Holder-of-Key profile
+- Add created_at timestamps to all mongodb documents
+- Look for existing persistent id's before creating new ones
+- Do not add AllowCreate property for default transient NameID
+- Enable entity category import from module search path
+- Add SAML subject identifier attributes to saml2_uri attributemap
+- Fix deprecation warning regarding the cgi module - use the html module when available
+- Misc minor improvements
+- tests: Be compatible with latest pytest
+- tests: Make tests pass after 2024
+- tests: Add py37 as a test target
+- docs: Correct instructions to run tests
+- docs: Fix misc typos
+- examples: Set cherrypy version explicitly
+
+
+## 4.7.0 (2019-04-02)
+
+- Add support for MDQ signature verification
+- Raise XmlsecError if xmlsec1 operations do not succeed
+- Handle non standard response error status codes correctly
+- Remove the hardcoded warning filter; pass -Wd to the python
+  interpreter to enable warnings
+- Remove the python-future dependency and only use six
+- Minor python2 and python3 compatibility fixes
+  (unicode strings and example code)
+- Minor documentation fixes
+
+
 ## 4.6.5 (2018-12-04)
 
 - Fix for response status error case handling (introduced in v4.6.5)
