@@ -1013,6 +1013,7 @@ class MetadataStore(MetaData):
                         # TODO
                         _md = MetaDataMDX(key['url'],
                                           **key['kwargs'])
+                        _md.load()
                         return
 
                     if len(key) == 2:
