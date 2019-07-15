@@ -744,7 +744,7 @@ class MetaDataExtern(InMemoryMetaData):
         # adding https tls/ssl check
         self.disable_ssl_certificate_validation = kwargs.get('disable_ssl_certificate_validation', False)
         self.ca_cert = kwargs.get('ca_cert', None)
-        self.ssl_verification = True if not self.disable_ssl_certificate_validation else False
+        self.ssl_verification = False if self.disable_ssl_certificate_validation else True
         if self.ca_cert:
             self.ssl_verification = self.ca_cert
 
