@@ -17,6 +17,7 @@
     provides methods and functions to convert SAML classes to and from strings.
 """
 
+import copy
 import logging
 
 import six
@@ -58,14 +59,28 @@ XS_NAMESPACE = 'http://www.w3.org/2001/XMLSchema'
 DS_NAMESPACE = 'http://www.w3.org/2000/09/xmldsig#'
 MD_NAMESPACE = "urn:oasis:names:tc:SAML:2.0:metadata"
 MDUI_NAMESPACE = "urn:oasis:names:tc:SAML:metadata:ui"
-DEFAULT_NS_PREFIXES = {'saml': NAMESPACE, 'samlp': SAMLP_NAMESPACE,
-                       'ds': DS_NAMESPACE, 'xsi': XSI_NAMESPACE,
-                       'xs': XS_NAMESPACE,
-                       'mdui': MDUI_NAMESPACE,
-                       'md': MD_NAMESPACE,
-                       # 'alg': TODO: algsupport.DIGEST_METHODS|SIGNING_METHODS shoulb be moved before mapping them here
-                       # TODO: <ns1:EntityAttributes>
-                       }
+XENC_NAMESPACE = "http://www.w3.org/2001/04/xmlenc#"
+
+# this should be configurable by users
+OASIS_DEFAULT_NS_PREFIXES = {'saml': NAMESPACE, 'samlp': SAMLP_NAMESPACE,
+                             'ds': DS_NAMESPACE, 'xsi': XSI_NAMESPACE,
+                             'xs': XS_NAMESPACE,
+                             'mdui': MDUI_NAMESPACE,
+                             'md': MD_NAMESPACE,
+                             'xenc': XENC_NAMESPACE,
+                             # mdattr: <ns1:EntityAttributes>
+                            }
+
+
+# make DEFAULT_NS_PREFIXES as default without register ns in every entities
+for prefix, uri in OASIS_DEFAULT_NS_PREFIXES.items():
+    try:
+        ElementTree.register_namespace(prefix, uri)
+    except AttributeError:
+        # Backwards compatibility with ET < 1.3
+        ElementTree._namespace_map[uri] = prefix
+    except ValueError:
+        pass
 
 
 NAMEID_FORMAT_EMAILADDRESS = (
@@ -90,6 +105,13 @@ BINDING_HTTP_POST = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST'
 BINDING_HTTP_ARTIFACT = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact'
 BINDING_URI = 'urn:oasis:names:tc:SAML:2.0:bindings:URI'
 
+def replace_ns_prefixes(value, ns):
+    """function to adapt ns to user's customs
+    """
+    if not SWAPPED_NS_PREFIXES:
+        return value
+    return value.replace(DEFAULT_SWAPPED_NS_PREFIXES[ns],
+                         SWAPPED_NS_PREFIXES[ns])
 
 def class_name(instance):
     return "%s:%s" % (instance.c_namespace, instance.c_tag)
@@ -705,19 +727,19 @@ class SamlBase(ExtensionContainer):
 
         return ElementTree.tostring(elem, encoding="UTF-8")
 
-    def to_string(self, nspair=DEFAULT_NS_PREFIXES):
+    def to_string(self, nspair=None):
         """Converts the Saml object to a string containing XML.
 
         :param nspair: A dictionary of prefixes and uris to use when
             constructing the text representation.
         :return: String representation of the object
         """
-        if not nspair and self.c_ns_prefix:
+        if self.c_ns_prefix:
             nspair = self.c_ns_prefix
 
         if nspair:
             self.register_prefix(nspair)
-
+        
         return ElementTree.tostring(self._to_element_tree(), encoding="UTF-8")
 
     def __str__(self):
