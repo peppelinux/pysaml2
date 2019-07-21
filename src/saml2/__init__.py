@@ -18,7 +18,6 @@
 """
 
 import logging
-
 import six
 
 import saml2.version
@@ -712,7 +711,7 @@ class SamlBase(ExtensionContainer):
             constructing the text representation.
         :return: String representation of the object
         """
-        if self.c_ns_prefix:
+        if not nsargs and self.c_ns_prefix:
             nspair = self.c_ns_prefix
 
         if nspair:
