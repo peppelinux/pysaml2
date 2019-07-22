@@ -19,7 +19,6 @@
 
 import copy
 import logging
-
 import six
 
 import saml2.version
@@ -50,38 +49,26 @@ root_logger.level = logging.NOTSET
 
 NAMESPACE = 'urn:oasis:names:tc:SAML:2.0:assertion'
 # TEMPLATE = '{urn:oasis:names:tc:SAML:2.0:assertion}%s'
-# XSI_NAMESPACE = 'http://www.w3.org/2001/XMLSchema-instance'
-
-# spaceone's https://github.com/IdentityPython/pysaml2/pull/326
 SAMLP_NAMESPACE = 'urn:oasis:names:tc:SAML:2.0:protocol'
 XSI_NAMESPACE = 'http://www.w3.org/2001/XMLSchema-instance'
 XS_NAMESPACE = 'http://www.w3.org/2001/XMLSchema'
-DS_NAMESPACE = 'http://www.w3.org/2000/09/xmldsig#'
 MD_NAMESPACE = "urn:oasis:names:tc:SAML:2.0:metadata"
 MDUI_NAMESPACE = "urn:oasis:names:tc:SAML:metadata:ui"
+DS_NAMESPACE = 'http://www.w3.org/2000/09/xmldsig#'
 XENC_NAMESPACE = "http://www.w3.org/2001/04/xmlenc#"
+ALG_NAMESPACE = "urn:oasis:names:tc:SAML:metadata:algsupport"
+MDATTR_NAMESPACE = "urn:oasis:names:tc:SAML:metadata:attribute"
 
-# this should be configurable by users
-OASIS_DEFAULT_NS_PREFIXES = {'saml': NAMESPACE, 'samlp': SAMLP_NAMESPACE,
-                             'ds': DS_NAMESPACE, 'xsi': XSI_NAMESPACE,
+OASIS_DEFAULT_NS_PREFIXES = {'saml': NAMESPACE,
+                             'samlp': SAMLP_NAMESPACE,
+                             'ds': DS_NAMESPACE,
+                             'xsi': XSI_NAMESPACE,
                              'xs': XS_NAMESPACE,
                              'mdui': MDUI_NAMESPACE,
                              'md': MD_NAMESPACE,
                              'xenc': XENC_NAMESPACE,
-                             # mdattr: <ns1:EntityAttributes>
-                            }
-
-
-# make DEFAULT_NS_PREFIXES as default without register ns in every entities
-for prefix, uri in OASIS_DEFAULT_NS_PREFIXES.items():
-    try:
-        ElementTree.register_namespace(prefix, uri)
-    except AttributeError:
-        # Backwards compatibility with ET < 1.3
-        ElementTree._namespace_map[uri] = prefix
-    except ValueError:
-        pass
-
+                             'alg': ALG_NAMESPACE,
+                             'mdattr': MDATTR_NAMESPACE}
 
 NAMEID_FORMAT_EMAILADDRESS = (
     "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress")
@@ -592,7 +579,8 @@ class SamlBase(ExtensionContainer):
         self._add_members_to_element_tree(new_tree)
         return new_tree
 
-    def register_prefix(self, nspair):
+    @staticmethod
+    def register_prefix(nspair):
         """
         Register with ElementTree a set of namespaces
 
@@ -720,11 +708,8 @@ class SamlBase(ExtensionContainer):
                 del elem.attrib[key]
 
     def to_string_force_namespace(self, nspair):
-
         elem = self._to_element_tree()
-
         self.set_prefixes(elem, nspair)
-
         return ElementTree.tostring(elem, encoding="UTF-8")
 
     def to_string(self, nspair=None):
@@ -734,12 +719,12 @@ class SamlBase(ExtensionContainer):
             constructing the text representation.
         :return: String representation of the object
         """
-        if self.c_ns_prefix:
+        if not nspair and self.c_ns_prefix:
             nspair = self.c_ns_prefix
 
         if nspair:
             self.register_prefix(nspair)
-        
+
         return ElementTree.tostring(self._to_element_tree(), encoding="UTF-8")
 
     def __str__(self):
@@ -1078,3 +1063,6 @@ def is_required_attribute(cls, attr):
     :return: True if required
     """
     return cls.c_attributes[attr][REQUIRED]
+
+# this register preferred prefix namespaces
+SamlBase.register_prefix(OASIS_DEFAULT_NS_PREFIXES)

@@ -10,11 +10,6 @@ __author__ = 'roland'
 def test_nsprefix():
     status_message = samlp.StatusMessage()
     status_message.text = "OK"
-
-    # not possibile: ns0 -> raise ValueError("Prefix format reserved for internal use")
-    #status_message.register_prefix(nspair={"ns0": saml.NAMESPACE,
-                                           #"ns0": samlp.NAMESPACE})
-                                           
     status_message.register_prefix(nspair={"samla": saml.NAMESPACE,
                                            "samla": samlp.NAMESPACE})
     txt = "%s" % status_message
