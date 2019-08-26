@@ -211,17 +211,15 @@ ENC_NODE_NAME = 'urn:oasis:names:tc:SAML:2.0:assertion:EncryptedAssertion'
 ENC_KEY_CLASS = 'EncryptedKey'
 
 def get_environ_delete_tmpfiles():
-    xmlsec_delete_tmpfiles = os.environ.get('PYSAML2_DELETE_XMLSEC_TMP', None)
-    if not xmlsec_delete_tmpfiles:
-        xmlsec_delete_tmpfiles = True
-    elif xmlsec_delete_tmpfiles == 'False':
+    xmlsec_delete_tmpfiles = os.environ.get('PYSAML2_DELETE_XMLSEC_TMP', "True")
+    if xmlsec_delete_tmpfiles.upper() == 'FALSE':
         xmlsec_delete_tmpfiles = False
         logger.warn('PYSAML2_DELETE_XMLSEC_TMP set to False, '
                     'temporary xml files will not be deleted.')
     else:
         xmlsec_delete_tmpfiles = True
     return xmlsec_delete_tmpfiles
-    
+
 def _make_vals(val, klass, seccont, klass_inst=None, prop=None, part=False,
                base64encode=False, elements_to_sign=None):
     """
@@ -333,7 +331,7 @@ def signed_instance_factory(instance, seccont, elements_to_sign=None):
         return instance
 
 
-def make_temp(string, suffix='', decode=True, delete=get_environ_delete_tmpfiles()):
+def make_temp(string, suffix='', decode=True, delete=True):
     """ xmlsec needs files in some cases where only strings exist, hence the
     need for this function. It creates a temporary file with the
     string as only content.
@@ -691,7 +689,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
         assert (isinstance(xmlsec_binary, six.string_types))
         self.xmlsec = xmlsec_binary
         self._xmlsec_delete_tmpfiles = get_environ_delete_tmpfiles()
-        
+
         try:
             self.non_xml_crypto = RSACrypto(kwargs['rsa_key'])
         except KeyError:
@@ -787,7 +785,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
 
         if self._xmlsec_delete_tmpfiles:
             os.remove(fil)
-        
+
         return output.decode('utf-8')
 
     def decrypt(self, enctext, key_file, id_attr):
@@ -837,7 +835,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
             decode=False,
             delete=self._xmlsec_delete_tmpfiles,
         )
-        
+
         com_list = [
             self.xmlsec,
             '--sign',
@@ -930,10 +928,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
                 raise XmlsecError(errmsg)
 
             ntf.seek(0)
-            ntf_content = ntf.read()
-            #if self._xmlsec_delete_tmpfiles:
-                #os.remove(ntf.name)
-            return p_out, p_err, ntf_content
+            return p_out, p_err, ntf.read()
 
 
 class CryptoBackendXMLSecurity(CryptoBackend):
