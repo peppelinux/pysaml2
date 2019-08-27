@@ -717,8 +717,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
         :return:
         """
         logger.debug('Encryption input len: %d', len(text))
-        _, fil = make_temp(text, decode=False, delete=False)
-
+        f, fil = make_temp(text, decode=False)
         com_list = [
             self.xmlsec,
             '--encrypt',
@@ -734,9 +733,6 @@ class CryptoBackendXmlSec1(CryptoBackend):
             (_stdout, _stderr, output) = self._run_xmlsec(com_list, [template])
         except XmlsecError as e:
             six.raise_from(EncryptError(com_list), e)
-
-        if self._xmlsec_delete_tmpfiles:
-            os.remove(fil)
 
         return output
 
@@ -758,10 +754,9 @@ class CryptoBackendXmlSec1(CryptoBackend):
         if isinstance(statement, SamlBase):
             statement = pre_encrypt_assertion(statement)
 
-        _, fil = make_temp(
-            _str(statement), decode=False,
-            delete=False)
-        _, tmpl = make_temp(_str(template), decode=False)
+        f, fil = make_temp(
+            _str(statement), decode=False)
+        t, tmpl = make_temp(_str(template), decode=False)
 
         if not node_xpath:
             node_xpath = ASSERT_XPATH
@@ -782,9 +777,6 @@ class CryptoBackendXmlSec1(CryptoBackend):
             (_stdout, _stderr, output) = self._run_xmlsec(com_list, [tmpl])
         except XmlsecError as e:
             six.raise_from(EncryptError(com_list), e)
-
-        if self._xmlsec_delete_tmpfiles:
-            os.remove(fil)
 
         return output.decode('utf-8')
 
@@ -1376,19 +1368,15 @@ class SecurityContext(object):
         for key in keys:
             if not isinstance(key, six.binary_type):
                 key = key.encode("ascii")
-            _, key_file = make_temp(key, decode=False,
-                                    delete=False)
+            key_file, _ = make_temp(key, decode=False)
             key_files.append(key_file)
 
         try:
-            dectext = self.decrypt(enctext, key_file=key_files, id_attr=id_attr)
+            dectext = self.decrypt(enctext, key_file=[x.name for x in key_files], id_attr=id_attr)
         except DecryptError as e:
             raise
         else:
             return dectext
-        finally:
-            for key_file in key_files:
-                os.unlink(key_file)
 
     def decrypt(self, enctext, key_file=None, id_attr=''):
         """ Decrypting an encrypted text by the use of a private key.
