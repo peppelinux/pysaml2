@@ -4,7 +4,7 @@ Configuration of pySAML2 entities
 =================================
 
 Whether you plan to run a pySAML2 Service Provider, Identity Provider or an
-attribute authority you have to configure it. The format of the configuration
+attribute authority, you have to configure it. The format of the configuration
 file is the same regardless of which type of service you plan to run.
 What differs are some of the directives.
 Below you will find a list of all the used directives in alphabetical order.
@@ -34,6 +34,7 @@ The basic structure of the configuration file is therefore like this::
         "key_file" : "my.key",
         "cert_file" : "ca.pem",
         "xmlsec_binary" : "/usr/local/bin/xmlsec1",
+        "delete_tmpfiles": True,
         "metadata": {
             "local": ["edugain.xml"],
         },
@@ -42,7 +43,7 @@ The basic structure of the configuration file is therefore like this::
     }
 
 .. note:: You can build the metadata file for your services directly from the
-    configuration.The make_metadata.py script in the pySAML2 tools directory
+    configuration. The make_metadata.py script in the pySAML2 tools directory
     will do that for you.
 
 Configuration directives
@@ -81,7 +82,7 @@ Format::
     "attribute_map_dir": "attribute-maps"
 
 Points to a directory which has the attribute maps in Python modules.
-A typical map file will looks like this::
+A typical map file will look like this::
 
     MAP = {
         "identifier": "urn:oasis:names:tc:SAML:2.0:attrname-format:basic",
@@ -111,7 +112,7 @@ As you see the format is again a python dictionary where the key is the
 name to convert from, and the value is the name to convert to.
 
 Since *to* in most cases is the inverse of the *fro* file, the
-software allowes you to only specify one of them and it will
+software allows you only to specify one of them, and it will
 automatically create the other.
 
 cert_file
@@ -185,6 +186,7 @@ metadata
 
 Contains a list of places where metadata can be found. This can be
 
+* a local directory accessible on the server the service runs on
 * a local file accessible on the server the service runs on
 * a remote URL serving aggregate metadata
 * a metadata query protocol (MDQ) service URL
@@ -193,6 +195,7 @@ For example::
 
     "metadata" : {
         "local": [
+            "/opt/metadata"
             "metadata.xml",
             "vo_metadata.xml",
         ],
@@ -233,7 +236,7 @@ Where you describe the organization responsible for the service.::
 .. note:: You can specify the language of the name, or the language used on
     the webpage, by entering a tuple, instead of a simple string,
     where the second part is the language code. If you don't specify a
-    language the default is "en" (English).
+    language, the default is "en" (English).
 
 preferred_binding
 ^^^^^^^^^^^^^^^^^
@@ -294,7 +297,7 @@ could look something like this::
 
 There are two options common to all services: 'name' and 'endpoints'.
 The remaining options are specific to one or the other of the service types.
-Which one is specified along side the name of the option.
+Which one is specified alongside the name of the option.
 
 accepted_time_diff
 ^^^^^^^^^^^^^^^^^^
@@ -303,8 +306,8 @@ If your computer and another computer that you are communicating with are not
 in synch regarding the computer clock, then here you can state how big a
 difference you are prepared to accept.
 
-.. note:: This will indiscriminately effect all time comparisons.
-    Hence your server my accept a statement that in fact is to old.
+.. note:: This will indiscriminately affect all-time comparisons.
+    Hence your server my accept a statement that in fact is too old.
 
 xmlsec_binary
 ^^^^^^^^^^^^^
@@ -316,6 +319,17 @@ Example::
 
     "xmlsec_binary": "/usr/local/bin/xmlsec1",
 
+delete_tmpfiles
+^^^^^^^^^^^^^^^
+
+In many cases temporary files will have to be created during the
+encryption/decryption/signing/validation process.
+This option defines whether these temporary files will be automatically deleted when
+they are no longer needed. Setting this to False, will keep these files until they are
+manually deleted or automatically deleted by the OS (i.e Linux rules for /tmp).
+Absence of this option, defaults to True.
+
+
 valid_for
 ^^^^^^^^^
 
@@ -323,7 +337,7 @@ How many *hours* this configuration is expected to be accurate.::
 
     "valid_for": 24
 
-This of course is only used by *make_metadata.py*.
+This, of course, is only used by *make_metadata.py*.
 The server will not stop working when this amount of time has elapsed :-).
 
 Specific directives
@@ -352,12 +366,12 @@ True or False. Default is False.
 policy
 """"""
 
-If the server is an IdP and/or an AA then there might be reasons to do things
+If the server is an IdP and/or an AA, then there might be reasons to do things
 differently depending on who is asking; this is where that is specified.
 The keys are 'default' and SP entity identifiers.  Default is used whenever
 there is no entry for a specific SP. The reasoning is also that if there is
 no default and only SP entity identifiers as keys, then the server will only
-except connections from the specified SPs.
+accept connections from the specified SPs.
 An example might be::
 
     "service": {
@@ -381,24 +395,24 @@ An example might be::
 
 *lifetime*
     This is the maximum amount of time before the information should be
-    regarded as stale. In an Assertion this is represented in the NotOnOrAfter
+    regarded as stale. In an Assertion, this is represented in the NotOnOrAfter
     attribute.
 *attribute_restrictions*
-    By default there is no restrictions as to which attributes should be
-    return. Instead all the attributes and values that are gathered by the
+    By default, there are no restrictions as to which attributes should be
+    returned. Instead, all the attributes and values that are gathered by the
     database backends will be returned if nothing else is stated.
     In the example above the SP with the entity identifier
     "urn:mace:umu.se:saml:roland:sp"
     has an attribute restriction: only the attributes
-    'givenName' and 'surName' are to be returned. There is no limitations as to
+    'givenName' and 'surName' are to be returned. There are no limitations as to
     what values on these attributes that can be returned.
 *name_form*
     Which name-form that should be used when sending assertions.
-    Using this information the attribute name in the data source will be mapped to
+    Using this information, the attribute name in the data source will be mapped to
     the friendly name, and the saml attribute name will be taken from the uri/oid
     defined in the attribute map.
 
-If restrictions on values are deemed necessary those are represented by
+If restrictions on values are deemed necessary, those are represented by
 regular expressions.::
 
     "service": {
@@ -425,7 +439,7 @@ authn_requests_signed
 """""""""""""""""""""
 
 Indicates if the Authentication Requests sent by this SP should be signed
-by default. This can be overriden by application code for a specific call.
+by default. This can be overridden by application code for a specific call.
 
 This sets the AuthnRequestsSigned attribute of the SPSSODescriptor node
 of the metadata so the IdP will know this SP preference.
@@ -471,6 +485,20 @@ Example::
     }
 
 
+name_id_format_allow_create
+"""""""""""""""""""""""""""
+
+Enable AllowCreate in NameIDPolicy.
+
+Example::
+
+    "service": {
+        "sp": {
+            "name_id_format_allow_create": True,
+        }
+    }
+
+
 allow_unsolicited
 """""""""""""""""
 
@@ -500,7 +528,7 @@ Example::
         }
     }
 
-This kind of functionality is required for the eIDAS SAML profile
+This kind of functionality is required for the eIDAS SAML profile.
 
 > eIDAS-Connectors SHOULD NOT provide AssertionConsumerServiceURL.
 
@@ -605,7 +633,7 @@ something like this::
         }
     }
 
-In this case the SP has only one IdP it can use.
+In this case, the SP has only one IdP it can use.
 
 optional_attributes
 """""""""""""""""""
@@ -620,7 +648,7 @@ Example::
         }
     }
 
-Since the attribute names used here are the user friendly ones an attribute map
+Since the attribute names used here are the user-friendly ones an attribute map
 must exist, so that the server can use the full name when communicating
 with other servers.
 
@@ -638,7 +666,7 @@ Example::
     }
 
 Again as for *optional_attributes* the names given are expected to be
-the user friendly names.
+the user-friendly names.
 
 want_assertions_signed
 """"""""""""""""""""""
@@ -658,7 +686,7 @@ Example::
     }
 
 want_assertions_or_response_signed
-""""""""""""""""""""
+""""""""""""""""""""""""""""""""""
 
 Indicates that *either* the Authentication Response *or* the assertions
 contained within the response to this SP must be signed.
@@ -689,7 +717,7 @@ idp/aa/sp
 ^^^^^^^^^
 
 If the configuration is covering both two or three different service types
-(like if one server is actually acting as both an IdP and a SP) then in some
+(like if one server is actually acting as both an IdP and an SP) then in some
 cases you might want to have these below different for the different services.
 
 endpoints
@@ -707,7 +735,7 @@ This directive has as value a dictionary with one or more of the following keys:
 * single_logout_service (aa, idp, sp)
 * single_sign_on_service (idp)
 
-The values per service is a list of endpoint specifications.
+The value per service is a list of endpoint specifications.
 An endpoint specification can either be just the URL::
 
   ”http://localhost:8088/A"
@@ -743,7 +771,7 @@ logout_requests_signed
 
 Indicates if this entity will sign the Logout Requests originated from it.
 
-This can be overriden by application code for a specific call.
+This can be overridden by application code for a specific call.
 
 Valid values are True or False. Default value is False.
 
@@ -759,9 +787,9 @@ subject_data
 """"""""""""
 
 The name of a database where the map between a local identifier and
-a distributed identifier is kept. By default this is a shelve database.
-So if you just specify name, then a shelve database with that name
-is created. On the other hand if you specify a tuple then the first
+a distributed identifier is kept. By default, this is a shelve database.
+So if you just specify a name, then a shelve database with that name
+is created. On the other hand, if you specify a tuple, then the first
 element in the tuple specifies which type of database you want to use
 and the second element is the address of the database.
 
@@ -816,6 +844,7 @@ We start with a simple but fairly complete Service provider configuration::
         "key_file" : "./mykey.pem",
         "cert_file" : "./mycert.pem",
         "xmlsec_binary" : "/usr/local/bin/xmlsec1",
+        "delete_tmpfiles": True,
         "attribute_map_dir": "./attributemaps",
         "metadata": {
             "local": ["idp.xml"]
@@ -832,8 +861,8 @@ We start with a simple but fairly complete Service provider configuration::
             }]
     }
 
-This is the typical setup for a SP.
-A metadata file to load is *always* needed, but it can of course
+This is the typical setup for an SP.
+A metadata file to load is *always* needed, but it can, of course,
 contain anything from 1 up to many entity descriptions.
 
 ------
@@ -864,6 +893,7 @@ A slightly more complex configuration::
         "key_file" : "./mykey.pem",
         "cert_file" : "./mycert.pem",
         "xmlsec_binary" : "/usr/local/bin/xmlsec1",
+        "delete_tmpfiles": True,
         "metadata" : {
             "local": ["example.xml"],
             "remote": [{

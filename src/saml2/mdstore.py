@@ -35,18 +35,38 @@ from saml2.validate import valid_instance
 from saml2.time_util import valid
 from saml2.validate import NotValid
 from saml2.sigver import security_context
+from saml2.extension.mdattr import NAMESPACE as NS_MDATTR
+from saml2.extension.mdattr import EntityAttributes
+from saml2.extension.mdui import NAMESPACE as NS_MDUI
+from saml2.extension.mdui import UIInfo
+from saml2.extension.mdui import DisplayName
+from saml2.extension.mdui import Description
+from saml2.extension.mdui import InformationURL
+from saml2.extension.mdui import PrivacyStatementURL
+from saml2.extension.mdui import Logo
 
-__author__ = 'rolandh'
 
 logger = logging.getLogger(__name__)
 
+classnames = {
+    "mdattr_entityattributes": "{ns}&{tag}".format(
+        ns=NS_MDATTR, tag=EntityAttributes.c_tag
+    ),
+    "mdui_uiinfo": "{ns}&{tag}".format(ns=NS_MDUI, tag=UIInfo.c_tag),
+    "mdui_uiinfo_display_name": "{ns}&{tag}".format(ns=NS_MDUI, tag=DisplayName.c_tag),
+    "mdui_uiinfo_description": "{ns}&{tag}".format(ns=NS_MDUI, tag=Description.c_tag),
+    "mdui_uiinfo_information_url": "{ns}&{tag}".format(
+        ns=NS_MDUI, tag=InformationURL.c_tag
+    ),
+    "mdui_uiinfo_privacy_statement_url": "{ns}&{tag}".format(
+        ns=NS_MDUI, tag=PrivacyStatementURL.c_tag
+    ),
+    "mdui_uiinfo_logo": "{ns}&{tag}".format(ns=NS_MDUI, tag=Logo.c_tag),
+}
 
-class ToOld(Exception):
-    pass
-
-
-class SourceNotFound(Exception):
-    pass
+ENTITY_CATEGORY = "http://macedir.org/entity-category"
+ENTITY_CATEGORY_SUPPORT = "http://macedir.org/entity-category-support"
+ASSURANCE_CERTIFICATION = "urn:oasis:names:tc:SAML:attribute:assurance-certification"
 
 REQ2SRV = {
     # IDP
@@ -70,12 +90,14 @@ REQ2SRV = {
     "discovery_service_request": "discovery_response"
 }
 
-ENTITYATTRIBUTES = "urn:oasis:names:tc:SAML:metadata:attribute&EntityAttributes"
-ENTITY_CATEGORY = "http://macedir.org/entity-category"
-ENTITY_CATEGORY_SUPPORT = "http://macedir.org/entity-category-support"
+
+class ToOld(Exception):
+    pass
 
 
-# ---------------------------------------------------
+class SourceNotFound(Exception):
+    pass
+
 
 def load_extensions():
     from saml2 import extension
@@ -359,7 +381,7 @@ class MetaData(object):
         res = []
         if "extensions" in self[entity_id]:
             for elem in self[entity_id]["extensions"]["extension_elements"]:
-                if elem["__class__"] == ENTITYATTRIBUTES:
+                if elem["__class__"] == classnames["mdattr_entityattributes"]:
                     for attr in elem["attribute"]:
                         res.append(attr["text"])
 
@@ -471,7 +493,7 @@ class InMemoryMetaData(MetaData):
         if self.check_validity:
             try:
                 if not valid(entity_descr.valid_until):
-                    logger.error("Entity descriptor (entity id:%s) to old",
+                    logger.error("Entity descriptor (entity id:%s) too old",
                                  entity_descr.entity_id)
                     self.to_old.append(entity_descr.entity_id)
                     return
@@ -1222,6 +1244,15 @@ class MetadataStore(MetaData):
         attributes = self.entity_attributes(entity_id)
         return attributes.get(ENTITY_CATEGORY_SUPPORT, [])
 
+    def assurance_certifications(self, entity_id):
+        assurance_certifications = (
+            certification
+            for name, values in self.entity_attributes(entity_id).items()
+            if name == ASSURANCE_CERTIFICATION
+            for certification in values
+        )
+        return assurance_certifications
+
     def entity_attributes(self, entity_id):
         """
         Get all entity attributes for an entry in the metadata.
@@ -1243,13 +1274,144 @@ class MetadataStore(MetaData):
         except KeyError:
             return res
         for elem in ext["extension_elements"]:
-            if elem["__class__"] == ENTITYATTRIBUTES:
+            if elem["__class__"] == classnames["mdattr_entityattributes"]:
                 for attr in elem["attribute"]:
                     if attr["name"] not in res:
                         res[attr["name"]] = []
                     res[attr["name"]] += [v["text"] for v in attr[
                         "attribute_value"]]
         return res
+
+    def _lookup_elements_by_cls(self, root, cls):
+        elements = (
+            element
+            for uiinfo in root
+            for element_key, elements in uiinfo.items()
+            if element_key != "__class__"
+            for element in elements
+            if element.get("__class__") == cls
+        )
+        return elements
+
+    def _lookup_elements_by_key(self, root, key):
+        elements = (
+            element
+            for uiinfo in root
+            for elements in [uiinfo.get(key, [])]
+            for element in elements
+        )
+        return elements
+
+    def mdui_uiinfo(self, entity_id):
+        try:
+            data = self[entity_id]
+        except KeyError:
+            data = {}
+
+        descriptor_names = (
+            item
+            for item in data.keys()
+            if item.endswith("_descriptor")
+        )
+        descriptors = (
+            descriptor
+            for descriptor_name in descriptor_names
+            for descriptor in self[entity_id].get(descriptor_name, [])
+        )
+        extensions = (
+            extension
+            for descriptor in descriptors
+            for extension in descriptor.get("extensions", {}).get("extension_elements", [])
+        )
+        uiinfos = (
+            extension
+            for extension in extensions
+            if extension.get("__class__") == classnames["mdui_uiinfo"]
+        )
+        return uiinfos
+
+    def _mdui_uiinfo_i18n_elements_lookup(self, entity_id, langpref, element_hint, lookup):
+        uiinfos = self.mdui_uiinfo(entity_id)
+        elements = lookup(uiinfos, element_hint)
+        lang_elements = (
+            element
+            for element in elements
+            if langpref is None or element.get("lang") == langpref
+        )
+        values = (
+            value
+            for element in lang_elements
+            for value in [element.get("text")]
+        )
+        return values
+
+    def mdui_uiinfo_i18n_element_cls(self, entity_id, langpref, element_cls):
+        values = self._mdui_uiinfo_i18n_elements_lookup(
+            entity_id, langpref, element_cls, self._lookup_elements_by_cls
+        )
+        return values
+
+    def mdui_uiinfo_i18n_element_key(self, entity_id, langpref, element_key):
+        values = self._mdui_uiinfo_i18n_elements_lookup(
+            entity_id, langpref, element_key, self._lookup_elements_by_key
+        )
+        return values
+
+    def mdui_uiinfo_display_name(self, entity_id, langpref=None):
+        cls = classnames["mdui_uiinfo_display_name"]
+        values = self.mdui_uiinfo_i18n_element_cls(entity_id, langpref, cls)
+        return values
+
+    def mdui_uiinfo_description(self, entity_id, langpref=None):
+        cls = classnames["mdui_uiinfo_description"]
+        values = self.mdui_uiinfo_i18n_element_cls(entity_id, langpref, cls)
+        return values
+
+    def mdui_uiinfo_information_url(self, entity_id, langpref=None):
+        cls = classnames["mdui_uiinfo_information_url"]
+        values = self.mdui_uiinfo_i18n_element_cls(entity_id, langpref, cls)
+        return values
+
+    def mdui_uiinfo_privacy_statement_url(self, entity_id, langpref=None):
+        cls = classnames["mdui_uiinfo_privacy_statement_url"]
+        values = self.mdui_uiinfo_i18n_element_cls(entity_id, langpref, cls)
+        return values
+
+    def mdui_uiinfo_logo(self, entity_id, width=None, height=None):
+        uiinfos = self.mdui_uiinfo(entity_id)
+        cls = classnames["mdui_uiinfo_logo"]
+        elements = self._lookup_elements_by_cls(uiinfos, cls)
+        values = (
+            element
+            for element in elements
+            if width is None or element.get("width") == width
+            if height is None or element.get("height") == height
+        )
+        return values
+
+    def contact_person_data(self, entity_id, contact_type=None):
+        try:
+            data = self[entity_id]
+        except KeyError:
+            data = {}
+
+        contacts = (
+            {
+                "contact_type": _contact_type,
+                "given_name": contact.get("given_name", {}).get("text", ""),
+                "email_address": [
+                    address
+                    for email in contact.get("email_address", {})
+                    for address in [email.get("text")]
+                    if address
+                ],
+            }
+            for contact in data.get("contact_person", [])
+            for _contact_type in [contact.get("contact_type", "")]
+            if contact_type is None or contact_type == _contact_type
+        )
+
+        return contacts
 
     def bindings(self, entity_id, typ, service):
         for _md in self.metadata.values():

@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 import datetime
 import re
+import os
+from unittest.mock import patch
 
 from saml2.mdstore import MetadataStore, MetaDataMDX
 from saml2.mdstore import destinations
@@ -17,17 +19,12 @@ from saml2 import saml
 from saml2 import config
 from saml2.attribute_converter import ac_factory
 from saml2.attribute_converter import d_to_local_name
-
-from saml2.extension import mdui
-from saml2.extension import idpdisc
-from saml2.extension import dri
-from saml2.extension import mdattr
-from saml2.extension import ui
 from saml2.s_utils import UnknownPrincipal
-from saml2 import xmldsig
-from saml2 import xmlenc
 
 from pathutils import full_path
+
+
+TESTS_DIR = os.path.dirname(__file__)
 
 sec_config = config.Config()
 #sec_config.xmlsec_binary = sigver.get_xmlsec_binary(["/opt/local/bin"])
@@ -313,7 +310,15 @@ def test_load_local_dir():
     assert len(mds.keys()) == 4  # number of idps
 
 
-def test_load_external():
+@patch('saml2.httpbase.requests.request')
+def test_load_external(mock_request):
+    filepath = os.path.join(TESTS_DIR, "remote_data/InCommon-metadata-export.xml")
+    with open(filepath) as fd:
+        data = fd.read()
+    mock_request.return_value.ok = True
+    mock_request.return_value.status_code = 200
+    mock_request.return_value.content = data
+
     sec_config.xmlsec_binary = sigver.get_xmlsec_binary(["/opt/local/bin"])
     mds = MetadataStore(ATTRCONV, sec_config,
                         disable_ssl_certificate_validation=True)
