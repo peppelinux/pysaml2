@@ -70,6 +70,7 @@ COMMON_ARGS = [
     "allow_unknown_attributes",
     "crypto_backend",
     "id_attr_name",
+    "delete_tmpfiles",
     "signing_algorithm",
     "digest_algorithm",
 ]
@@ -247,6 +248,7 @@ class Config(object):
         self.attribute = []
         self.attribute_profile = []
         self.requested_attribute_name_format = NAME_FORMAT_URI
+        self.delete_tmpfiles = True
         self.signing_algorithm = None
         self.digest_algorithm = None
 
@@ -363,6 +365,12 @@ class Config(object):
                 pass
             except TypeError:  # Something that can't be a string
                 setattr(self, arg, cnf[arg])
+
+        if not self.delete_tmpfiles:
+            logger.warning(
+                "delete_tmpfiles is set to False; "
+                "temporary files will not be deleted."
+            )
 
         if "service" in cnf:
             for typ in ["aa", "idp", "sp", "pdp", "aq"]:

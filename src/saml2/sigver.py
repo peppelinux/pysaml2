@@ -8,11 +8,9 @@ import hashlib
 import itertools
 import logging
 import os
-import ssl
 import six
 
 from time import mktime
-from binascii import hexlify
 
 from six.moves.urllib import parse
 
@@ -43,7 +41,6 @@ from saml2.s_utils import sid
 from saml2.s_utils import Unsupported
 
 from saml2.time_util import instant
-from saml2.time_util import utc_now
 from saml2.time_util import str_to_time
 
 from saml2.xmldsig import SIG_RSA_SHA1
@@ -195,7 +192,7 @@ def get_xmlsec_binary(paths=None):
     raise SigverError('Cannot find {binary}'.format(binary=bin_name))
 
 
-def _get_xmlsec_cryptobackend(path=None, search_paths=None):
+def _get_xmlsec_cryptobackend(path=None, search_paths=None, delete_tmpfiles=True):
     """
     Initialize a CryptoBackendXmlSec1 crypto backend.
 
@@ -203,7 +200,7 @@ def _get_xmlsec_cryptobackend(path=None, search_paths=None):
     """
     if path is None:
         path = get_xmlsec_binary(paths=search_paths)
-    return CryptoBackendXmlSec1(path)
+    return CryptoBackendXmlSec1(path, delete_tmpfiles=delete_tmpfiles)
 
 
 NODE_NAME = 'urn:oasis:names:tc:SAML:2.0:assertion:Assertion'
@@ -331,31 +328,32 @@ def signed_instance_factory(instance, seccont, elements_to_sign=None):
         return instance
 
 
-def make_temp(string, suffix='', decode=True, delete=True):
-    """ xmlsec needs files in some cases where only strings exist, hence the
-    need for this function. It creates a temporary file with the
-    string as only content.
+def make_temp(content, suffix="", decode=True, delete_tmpfiles=True):
+    """
+    Create a temporary file with the given content.
 
-    :param string: The information to be placed in the file
+    This is needed by xmlsec in some cases where only strings exist when files
+    are expected.
+
+    :param content: The information to be placed in the file
     :param suffix: The temporary file might have to have a specific
         suffix in certain circumstances.
-    :param decode: The input string might be base64 coded. If so it
+    :param decode: The input content might be base64 coded. If so it
         must, in some cases, be decoded before being placed in the file.
+    :param delete_tmpfiles: Whether to keep the tmp files or delete them when they are
+        no longer in use
     :return: 2-tuple with file pointer ( so the calling function can
         close the file) and filename (which is for instance needed by the
         xmlsec function).
     """
-    ntf = NamedTemporaryFile(suffix=suffix, delete=delete)
-    # Python3 tempfile requires byte-like object
-    if not isinstance(string, six.binary_type):
-        string = string.encode('utf-8')
-
-    if decode:
-        ntf.write(base64.b64decode(string))
-    else:
-        ntf.write(string)
+    content_encoded = (
+        content.encode("utf-8") if not isinstance(content, six.binary_type) else content
+    )
+    content_raw = base64.b64decode(content_encoded) if decode else content_encoded
+    ntf = NamedTemporaryFile(suffix=suffix, delete=delete_tmpfiles)
+    ntf.write(content_raw)
     ntf.seek(0)
-    return ntf, ntf.name
+    return ntf
 
 
 def split_len(seq, length):
@@ -684,12 +682,11 @@ class CryptoBackendXmlSec1(CryptoBackend):
 
     __DEBUG = 0
 
-    def __init__(self, xmlsec_binary, **kwargs):
+    def __init__(self, xmlsec_binary, delete_tmpfiles=True, **kwargs):
         CryptoBackend.__init__(self, **kwargs)
         assert (isinstance(xmlsec_binary, six.string_types))
         self.xmlsec = xmlsec_binary
-        self._xmlsec_delete_tmpfiles = get_environ_delete_tmpfiles()
-
+        self.delete_tmpfiles = delete_tmpfiles
         try:
             self.non_xml_crypto = RSACrypto(kwargs['rsa_key'])
         except KeyError:
@@ -717,13 +714,13 @@ class CryptoBackendXmlSec1(CryptoBackend):
         :return:
         """
         logger.debug('Encryption input len: %d', len(text))
-        f, fil = make_temp(text, decode=False)
+        tmp = make_temp(text, decode=False, delete_tmpfiles=self.delete_tmpfiles)
         com_list = [
             self.xmlsec,
             '--encrypt',
             '--pubkey-cert-pem', recv_key,
             '--session-key', session_key_type,
-            '--xml-data', fil,
+            '--xml-data', tmp.name,
         ]
 
         if xpath:
@@ -754,9 +751,12 @@ class CryptoBackendXmlSec1(CryptoBackend):
         if isinstance(statement, SamlBase):
             statement = pre_encrypt_assertion(statement)
 
-        f, fil = make_temp(
-            _str(statement), decode=False)
-        t, tmpl = make_temp(_str(template), decode=False)
+        tmp = make_temp(_str(statement),
+                        decode=False,
+                        delete_tmpfiles=self.delete_tmpfiles)
+        tmp2 = make_temp(_str(template),
+                         decode=False,
+                         delete_tmpfiles=self.delete_tmpfiles)
 
         if not node_xpath:
             node_xpath = ASSERT_XPATH
@@ -766,7 +766,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
             '--encrypt',
             '--pubkey-cert-pem', enc_key,
             '--session-key', key_type,
-            '--xml-data', fil,
+            '--xml-data', tmp.name,
             '--node-xpath', node_xpath,
         ]
 
@@ -774,7 +774,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
             com_list.extend(['--node-id', node_id])
 
         try:
-            (_stdout, _stderr, output) = self._run_xmlsec(com_list, [tmpl])
+            (_stdout, _stderr, output) = self._run_xmlsec(com_list, [tmp2.name])
         except XmlsecError as e:
             six.raise_from(EncryptError(com_list), e)
 
@@ -789,7 +789,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
         """
 
         logger.debug('Decrypt input len: %d', len(enctext))
-        _, fil = make_temp(enctext, decode=False)
+        tmp = make_temp(enctext, decode=False, delete_tmpfiles=self.delete_tmpfiles)
 
         com_list = [
             self.xmlsec,
@@ -800,7 +800,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
         ]
 
         try:
-            (_stdout, _stderr, output) = self._run_xmlsec(com_list, [fil])
+            (_stdout, _stderr, output) = self._run_xmlsec(com_list, [tmp.name])
         except XmlsecError as e:
             six.raise_from(DecryptError(com_list), e)
 
@@ -821,12 +821,10 @@ class CryptoBackendXmlSec1(CryptoBackend):
         if isinstance(statement, SamlBase):
             statement = str(statement)
 
-        _, fil = make_temp(
-            statement,
-            suffix='.xml',
-            decode=False,
-            delete=self._xmlsec_delete_tmpfiles,
-        )
+        tmp = make_temp(statement,
+                        suffix=".xml",
+                        decode=False,
+                        delete_tmpfiles=self.delete_tmpfiles)
 
         com_list = [
             self.xmlsec,
@@ -840,7 +838,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
             com_list.extend(['--node-id', node_id])
 
         try:
-            (stdout, stderr, output) = self._run_xmlsec(com_list, [fil])
+            (stdout, stderr, output) = self._run_xmlsec(com_list, [tmp.name])
         except XmlsecError as e:
             raise SignatureError(com_list)
 
@@ -867,12 +865,10 @@ class CryptoBackendXmlSec1(CryptoBackend):
         if not isinstance(signedtext, six.binary_type):
             signedtext = signedtext.encode('utf-8')
 
-        _, fil = make_temp(
-            signedtext,
-            suffix='.xml',
-            decode=False,
-            delete=self._xmlsec_delete_tmpfiles,
-        )
+        tmp = make_temp(signedtext,
+                        suffix=".xml",
+                        decode=False,
+                        delete_tmpfiles=self.delete_tmpfiles)
 
         com_list = [
             self.xmlsec,
@@ -887,7 +883,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
             com_list.extend(['--node-id', node_id])
 
         try:
-            (_stdout, stderr, _output) = self._run_xmlsec(com_list, [fil])
+            (_stdout, stderr, _output) = self._run_xmlsec(com_list, [tmp.name])
         except XmlsecError as e:
             six.raise_from(SignatureError(com_list), e)
 
@@ -901,7 +897,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
             key-value parameters
         :result: Whatever xmlsec wrote to an --output temporary file
         """
-        with NamedTemporaryFile(suffix='.xml', delete=self._xmlsec_delete_tmpfiles) as ntf:
+        with NamedTemporaryFile(suffix='.xml') as ntf:
             com_list.extend(['--output', ntf.name])
             com_list += extra_args
 
@@ -1030,7 +1026,8 @@ def security_context(conf):
             err_msg = err_msg.format(binary=xmlsec_binary)
             raise SigverError(err_msg)
 
-        crypto = _get_xmlsec_cryptobackend(xmlsec_binary)
+        crypto = _get_xmlsec_cryptobackend(xmlsec_binary,
+                                           delete_tmpfiles=conf.delete_tmpfiles)
 
         _file_name = conf.getattr('key_file', '')
         if _file_name:
@@ -1070,7 +1067,8 @@ def security_context(conf):
             enc_key_files=enc_key_files,
             encryption_keypairs=conf.encryption_keypairs,
             sec_backend=sec_backend,
-            id_attr=id_attr)
+            id_attr=id_attr,
+            delete_tmpfiles=conf.delete_tmpfiles)
 
 
 def encrypt_cert_from_item(item):
@@ -1260,7 +1258,8 @@ class SecurityContext(object):
             encryption_keypairs=None,
             enc_cert_type='pem',
             sec_backend=None,
-            id_attr=''):
+            id_attr='',
+            delete_tmpfiles=True):
 
         self.id_attr = id_attr or SecurityContext.DEFAULT_ID_ATTR_NAME
 
@@ -1311,8 +1310,8 @@ class SecurityContext(object):
             self.template = template
 
         self.encrypt_key_type = encrypt_key_type
-        # keep certificate files to debug xmlsec invocations
-        self._xmlsec_delete_tmpfiles = get_environ_delete_tmpfiles()
+        self.delete_tmpfiles = delete_tmpfiles
+
 
     def correctly_signed(self, xml, must=False):
         logger.debug('verify correct signature')
@@ -1364,15 +1363,19 @@ class SecurityContext(object):
         if not isinstance(keys, list):
             keys = [keys]
 
-        keys = [key for key in keys if key]
-        for key in keys:
-            if not isinstance(key, six.binary_type):
-                key = key.encode("ascii")
-            key_file, _ = make_temp(key, decode=False)
-            key_files.append(key_file)
+        keys_filtered = (key for key in keys if key)
+        keys_encoded = (
+            key.encode("ascii") if not isinstance(key, six.binary_type) else key
+            for key in keys_filtered
+        )
+        key_files = list(
+            make_temp(key, decode=False, delete_tmpfiles=self.delete_tmpfiles)
+            for key in keys_encoded
+        )
+        key_file_names = list(tmp.name for tmp in key_files)
 
         try:
-            dectext = self.decrypt(enctext, key_file=[x.name for x in key_files], id_attr=id_attr)
+            dectext = self.decrypt(enctext, key_file=key_file_names, id_attr=id_attr)
         except DecryptError as e:
             raise
         else:
@@ -1457,14 +1460,12 @@ class SecurityContext(object):
 
             for cert in _certs:
                 if isinstance(cert, six.string_types):
-                    certs.append(
-                        make_temp(
-                            pem_format(cert),
-                            suffix='.pem',
-                            decode=False,
-                            delete=self._xmlsec_delete_tmpfiles,
-                        )
-                    )
+                    content = pem_format(cert)
+                    tmp = make_temp(content,
+                                    suffix=".pem",
+                                    decode=False,
+                                    delete_tmpfiles=self.delete_tmpfiles)
+                    certs.append(tmp)
                 else:
                     certs.append(cert)
         else:
@@ -1473,12 +1474,10 @@ class SecurityContext(object):
         if not certs and not self.only_use_keys_in_metadata:
             logger.debug('==== Certs from instance ====')
             certs = [
-                make_temp(
-                    pem_format(cert),
-                    suffix='.pem',
-                    decode=False,
-                    delete=self._xmlsec_delete_tmpfiles,
-                )
+                make_temp(content=pem_format(cert),
+                          suffix=".pem",
+                          decode=False,
+                          delete_tmpfiles=self.delete_tmpfiles)
                 for cert in cert_from_instance(item)
             ]
         else:
@@ -1487,15 +1486,64 @@ class SecurityContext(object):
         if not certs:
             raise MissingKey(_issuer)
 
+        # saml-core section "5.4 XML Signature Profile" defines constrains on the
+        # xmldsig-core facilities. It explicitly dictates that enveloped signatures
+        # are the only signatures allowed. This mean that:
+        # * Assertion/RequestType/ResponseType elements must have an ID attribute
+        # * signatures must have a single Reference element
+        # * the Reference element must have a URI attribute
+        # * the URI attribute contains an anchor
+        # * the anchor points to the enclosing element's ID attribute
+        references = item.signature.signed_info.reference
+        signatures_must_have_a_single_reference_element = len(references) == 1
+        the_Reference_element_must_have_a_URI_attribute = (
+            signatures_must_have_a_single_reference_element
+            and hasattr(references[0], "uri")
+        )
+        the_URI_attribute_contains_an_anchor = (
+            the_Reference_element_must_have_a_URI_attribute
+            and references[0].uri.startswith("#")
+            and len(references[0].uri) > 1
+        )
+        the_anchor_points_to_the_enclosing_element_ID_attribute = (
+            the_URI_attribute_contains_an_anchor
+            and references[0].uri == "#{id}".format(id=item.id)
+        )
+        validators = {
+            "signatures must have a single reference element": (
+                signatures_must_have_a_single_reference_element
+            ),
+            "the Reference element must have a URI attribute": (
+                the_Reference_element_must_have_a_URI_attribute
+            ),
+            "the URI attribute contains an anchor": (
+                the_URI_attribute_contains_an_anchor
+            ),
+            "the anchor points to the enclosing element ID attribute": (
+                the_anchor_points_to_the_enclosing_element_ID_attribute
+            ),
+        }
+        if not all(validators.values()):
+            error_context = {
+                "message": "Signature failed to meet constraints on xmldsig",
+                "validators": validators,
+                "item ID": item.id,
+                "reference URI": item.signature.signed_info.reference[0].uri,
+                "issuer": _issuer,
+                "node name": node_name,
+                "xml document": decoded_xml,
+            }
+            raise SignatureError(error_context)
+
         verified = False
         last_pem_file = None
 
-        for _, pem_file in certs:
+        for pem_fd in certs:
             try:
-                last_pem_file = pem_file
+                last_pem_file = pem_fd.name
                 if self.verify_signature(
                         decoded_xml,
-                        pem_file,
+                        pem_fd.name,
                         node_name=node_name,
                         node_id=item.id,
                         id_attr=id_attr):
@@ -1665,7 +1713,9 @@ class SecurityContext(object):
             id_attr = self.id_attr
 
         if not key_file and key:
-            _, key_file = make_temp(str(key).encode(), '.pem')
+            content = str(key).encode()
+            tmp = make_temp(content, suffix=".pem", delete_tmpfiles=self.delete_tmpfiles)
+            key_file = tmp.name
 
         if not key and not key_file:
             key_file = self.key_file

@@ -1,8 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import datetime
+import os
 import re
 from collections import OrderedDict
+from unittest.mock import Mock
+from unittest.mock import patch
+
+import responses
 
 from six.moves.urllib import parse
 
@@ -24,7 +29,8 @@ from saml2.attribute_converter import d_to_local_name
 from saml2.s_utils import UnknownPrincipal
 from pathutils import full_path
 
-import responses
+
+TESTS_DIR = os.path.dirname(__file__)
 
 sec_config = config.Config()
 # sec_config.xmlsec_binary = sigver.get_xmlsec_binary(["/opt/local/bin"])
@@ -49,6 +55,7 @@ TEST_METADATA_STRING = """
 <EntitiesDescriptor
     xmlns="urn:oasis:names:tc:SAML:2.0:metadata"
     xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
+    xmlns:alg="urn:oasis:names:tc:SAML:metadata:algsupport"
     xmlns:shibmeta="urn:mace:shibboleth:metadata:1.0"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
@@ -56,6 +63,10 @@ TEST_METADATA_STRING = """
   <EntityDescriptor
     entityID="http://xenosmilus.umdc.umu.se/simplesaml/saml2/idp/metadata.php"
     xml:base="swamid-1.0/idp.umu.se-saml2.xml">
+    <md:Extensions>
+        <alg:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>
+        <alg:SigningMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
+    </md:Extensions>
   <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
     <KeyDescriptor>
       <ds:KeyInfo>
@@ -324,6 +335,60 @@ def test_mdx_single_sign_on_service():
     assert sso_loc[0]["location"] == "http://xenosmilus.umdc.umu.se/simplesaml/saml2/idp/metadata.php"
 
 
+@responses.activate
+def test_mdx_metadata_freshness_period_not_expired():
+    """Ensure that metadata is not refreshed if not expired."""
+
+    entity_id = "http://xenosmilus.umdc.umu.se/simplesaml/saml2/idp/metadata.php"
+    url = "http://mdx.example.com/entities/{}".format(
+        parse.quote_plus(MetaDataMDX.sha1_entity_transform(entity_id))
+    )
+
+    responses.add(
+        responses.GET,
+        url,
+        body=TEST_METADATA_STRING,
+        status=200,
+        content_type=SAML_METADATA_CONTENT_TYPE,
+    )
+
+    mdx = MetaDataMDX("http://mdx.example.com", freshness_period="P0Y0M0DT0H2M0S")
+    mdx._is_metadata_fresh = Mock(return_value=True)
+
+    mdx.single_sign_on_service(entity_id, BINDING_HTTP_REDIRECT)
+    assert entity_id in mdx.entity
+
+    mdx.single_sign_on_service(entity_id, BINDING_HTTP_REDIRECT)
+    assert len(responses.calls) == 1
+
+
+@responses.activate
+def test_mdx_metadata_freshness_period_expired():
+    """Ensure that metadata is not refreshed if not expired."""
+
+    entity_id = "http://xenosmilus.umdc.umu.se/simplesaml/saml2/idp/metadata.php"
+    url = "http://mdx.example.com/entities/{}".format(
+        parse.quote_plus(MetaDataMDX.sha1_entity_transform(entity_id))
+    )
+
+    responses.add(
+        responses.GET,
+        url,
+        body=TEST_METADATA_STRING,
+        status=200,
+        content_type=SAML_METADATA_CONTENT_TYPE,
+    )
+
+    mdx = MetaDataMDX("http://mdx.example.com", freshness_period="P0Y0M0DT0H2M0S")
+    mdx._is_metadata_fresh = Mock(return_value=False)
+
+    mdx.single_sign_on_service(entity_id, BINDING_HTTP_REDIRECT)
+    assert entity_id in mdx.entity
+
+    mdx.single_sign_on_service(entity_id, BINDING_HTTP_REDIRECT)
+    assert len(responses.calls) == 2
+
+
 # pyff-test not available
 # def test_mdx_service():
 #     sec_config.xmlsec_binary = sigver.get_xmlsec_binary(["/opt/local/bin"])
@@ -362,7 +427,15 @@ def test_load_local_dir():
     assert len(mds.keys()) == 4  # number of idps
 
 
-def test_load_extern_incommon():
+@patch('saml2.httpbase.requests.request')
+def test_load_extern_incommon(mock_request):
+    filepath = os.path.join(TESTS_DIR, "remote_data/InCommon-metadata-export.xml")
+    with open(filepath) as fd:
+        data = fd.read()
+    mock_request.return_value.ok = True
+    mock_request.return_value.status_code = 200
+    mock_request.return_value.content = data
+
     sec_config.xmlsec_binary = sigver.get_xmlsec_binary(["/opt/local/bin"])
     mds = MetadataStore(ATTRCONV, sec_config,
                         disable_ssl_certificate_validation=True)
@@ -387,7 +460,15 @@ def test_load_local():
     assert cfg
 
 
-def test_load_remote_encoding():
+@patch('saml2.httpbase.requests.request')
+def test_load_remote_encoding(mock_request):
+    filepath = os.path.join(TESTS_DIR, "remote_data/metadata.aaitest.xml")
+    with open(filepath) as fd:
+        data = fd.read()
+    mock_request.return_value.ok = True
+    mock_request.return_value.status_code = 200
+    mock_request.return_value.content = data
+
     crypto = sigver._get_xmlsec_cryptobackend()
     sc = sigver.SecurityContext(crypto, key_type="", cert_type="")
     httpc = HTTPBase()
@@ -465,6 +546,15 @@ def test_metadata_extension_algsupport():
     mds.imp(METADATACONF["12"])
     mdf = mds.metadata[full_path("uu.xml")]
     assert mds
+
+
+def test_supported_algorithms():
+    mds = MetadataStore(ATTRCONV, sec_config,
+                        disable_ssl_certificate_validation=True)
+    mds.imp(METADATACONF["11"])
+    algs = mds.supported_algorithms(entity_id='http://xenosmilus.umdc.umu.se/simplesaml/saml2/idp/metadata.php')
+    assert 'http://www.w3.org/2001/04/xmlenc#sha256' in algs['digest_methods']
+    assert 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256' in algs['signing_methods']
 
 
 def test_extension():
