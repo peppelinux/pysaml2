@@ -69,6 +69,8 @@ COMMON_ARGS = [
     "allow_unknown_attributes",
     "crypto_backend",
     "id_attr_name",
+    "signing_algorithm",
+    "digest_algorithm",
     "delete_tmpfiles",
 ]
 
@@ -244,6 +246,8 @@ class Config(object):
         self.attribute = []
         self.attribute_profile = []
         self.requested_attribute_name_format = NAME_FORMAT_URI
+        self.signing_algorithm = None
+        self.digest_algorithm = None
         self.delete_tmpfiles = True
 
     def setattr(self, context, attr, val):
