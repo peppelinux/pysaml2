@@ -195,7 +195,7 @@ Format::
     key_file: "key.pem"
 
 *key_file* is the name of a PEM formatted file that contains the private key
-of the service. This is presently used both to encrypt/sign assertions and as
+of the service. This is currently used both to encrypt/sign assertions and as
 the client key in an HTTPS session.
 
 metadata
@@ -276,7 +276,7 @@ Where you describe the organization responsible for the service.::
 preferred_binding
 ^^^^^^^^^^^^^^^^^
 
-Which binding should be prefered for a service.
+Which binding should be preferred for a service.
 Example configuration::
 
     "preferred_binding" = {
@@ -346,16 +346,16 @@ accepted_time_diff
 ^^^^^^^^^^^^^^^^^^
 
 If your computer and another computer that you are communicating with are not
-in synch regarding the computer clock, then here you can state how big a
+in sync regarding the computer clock, then here you can state how big a
 difference you are prepared to accept.
 
-.. note:: This will indiscriminately affect all-time comparisons.
-    Hence your server my accept a statement that in fact is too old.
+.. note:: This will indiscriminately affect all time comparisons.
+    Hence your server may accept a statement that in fact is too old.
 
 xmlsec_binary
 ^^^^^^^^^^^^^
 
-Presently xmlsec1 binaries are used for all the signing and encryption stuff.
+Currently xmlsec1 binaries are used for all the signing and encryption stuff.
 This option defines where the binary is situated.
 
 Example::
@@ -391,7 +391,7 @@ Directives that are specific to a certain type of service.
 idp/aa
 ^^^^^^
 
-Directives that are specific to an IdP or AA service instance
+Directives that are specific to an IdP or AA service instance.
 
 sign_assertion
 """"""""""""""
@@ -503,6 +503,8 @@ want_response_signed
 
 Indicates that Authentication Responses to this SP must be signed. If set to
 True, the SP will not consume any SAML Responses that are not signed.
+
+Valid values are True or False. Default value is True.
 
 Example::
 
@@ -635,7 +637,7 @@ name_format indicates the name format for that attribute, such as
 
 It is mandatory that at least name or friendly_name is set.
 By default attributes are assumed to be required.
-Missing attributes are infered based on the attribute maps data.
+Missing attributes are inferred based on the attribute maps data.
 
 Example::
 
@@ -850,7 +852,7 @@ or if you want to use for instance memcache::
 
     "subject_data": ("memcached", "localhost:12121"),
 
-*shelve* and *memcached* are the only database types that are presently
+*shelve* and *memcached* are the only database types that are currently
 supported.
 
 
