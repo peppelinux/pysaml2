@@ -44,6 +44,7 @@ class Request(object):
         # own copy
         self.xmlstr = xmldata[:]
         logger.debug("xmlstr: %s", self.xmlstr)
+
         try:
             self.message = self.signature_check(xmldata, origdoc=origdoc,
                                                 must=must,
@@ -51,7 +52,8 @@ class Request(object):
         except TypeError:
             raise
         except Exception as excp:
-            logger.info("EXCEPTION: %s", excp)
+            # if logger.info this error will be not exposed in the log
+            logger.error("EXCEPTION: %s", excp)
 
         if not self.message:
             logger.error("Response was not correctly signed")

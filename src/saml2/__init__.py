@@ -17,8 +17,8 @@
     provides methods and functions to convert SAML classes to and from strings.
 """
 
+import copy
 import logging
-
 import six
 
 from saml2.version import version as __version__
@@ -42,9 +42,29 @@ import defusedxml.ElementTree
 
 logger = logging.getLogger(__name__)
 
+
 NAMESPACE = 'urn:oasis:names:tc:SAML:2.0:assertion'
 # TEMPLATE = '{urn:oasis:names:tc:SAML:2.0:assertion}%s'
-# XSI_NAMESPACE = 'http://www.w3.org/2001/XMLSchema-instance'
+SAMLP_NAMESPACE = 'urn:oasis:names:tc:SAML:2.0:protocol'
+XSI_NAMESPACE = 'http://www.w3.org/2001/XMLSchema-instance'
+XS_NAMESPACE = 'http://www.w3.org/2001/XMLSchema'
+MD_NAMESPACE = "urn:oasis:names:tc:SAML:2.0:metadata"
+MDUI_NAMESPACE = "urn:oasis:names:tc:SAML:metadata:ui"
+DS_NAMESPACE = 'http://www.w3.org/2000/09/xmldsig#'
+XENC_NAMESPACE = "http://www.w3.org/2001/04/xmlenc#"
+ALG_NAMESPACE = "urn:oasis:names:tc:SAML:metadata:algsupport"
+MDATTR_NAMESPACE = "urn:oasis:names:tc:SAML:metadata:attribute"
+
+OASIS_DEFAULT_NS_PREFIXES = {'saml': NAMESPACE,
+                             'samlp': SAMLP_NAMESPACE,
+                             'ds': DS_NAMESPACE,
+                             'xsi': XSI_NAMESPACE,
+                             'xs': XS_NAMESPACE,
+                             'mdui': MDUI_NAMESPACE,
+                             'md': MD_NAMESPACE,
+                             'xenc': XENC_NAMESPACE,
+                             'alg': ALG_NAMESPACE,
+                             'mdattr': MDATTR_NAMESPACE}
 
 NAMEID_FORMAT_EMAILADDRESS = (
     "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress")
@@ -68,6 +88,13 @@ BINDING_HTTP_POST = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST'
 BINDING_HTTP_ARTIFACT = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact'
 BINDING_URI = 'urn:oasis:names:tc:SAML:2.0:bindings:URI'
 
+def replace_ns_prefixes(value, ns):
+    """function to adapt ns to user's customs
+    """
+    if not SWAPPED_NS_PREFIXES:
+        return value
+    return value.replace(DEFAULT_SWAPPED_NS_PREFIXES[ns],
+                         SWAPPED_NS_PREFIXES[ns])
 
 def class_name(instance):
     return "%s:%s" % (instance.c_namespace, instance.c_tag)
@@ -548,7 +575,8 @@ class SamlBase(ExtensionContainer):
         self._add_members_to_element_tree(new_tree)
         return new_tree
 
-    def register_prefix(self, nspair):
+    @staticmethod
+    def register_prefix(nspair):
         """
         Register with ElementTree a set of namespaces
 
@@ -676,11 +704,8 @@ class SamlBase(ExtensionContainer):
                 del elem.attrib[key]
 
     def to_string_force_namespace(self, nspair):
-
         elem = self._to_element_tree()
-
         self.set_prefixes(elem, nspair)
-
         return ElementTree.tostring(elem, encoding="UTF-8")
 
     def to_string(self, nspair=None):
@@ -1032,3 +1057,6 @@ def is_required_attribute(cls, attr):
     :return: True if required
     """
     return cls.c_attributes[attr][REQUIRED]
+
+# this register preferred prefix namespaces
+SamlBase.register_prefix(OASIS_DEFAULT_NS_PREFIXES)

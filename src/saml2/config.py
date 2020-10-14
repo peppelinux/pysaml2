@@ -34,6 +34,7 @@ COMMON_ARGS = [
     "logging",
     "debug",
     "entityid",
+    "xmlsec_disabled_algs",
     "xmlsec_binary",
     "key_file",
     "cert_file",
@@ -73,6 +74,8 @@ COMMON_ARGS = [
     "allow_unknown_attributes",
     "crypto_backend",
     "delete_tmpfiles",
+    "signing_algorithm",
+    "digest_algorithm",
 ]
 
 SP_ARGS = [
@@ -177,6 +180,7 @@ class Config(object):
         self.logging = None
         self._homedir = homedir
         self.entityid = None
+        self.xmlsec_disabled_algs = []
         self.xmlsec_binary = None
         self.xmlsec_path = []
         self.debug = False
@@ -232,6 +236,8 @@ class Config(object):
         self.attribute_profile = []
         self.requested_attribute_name_format = NAME_FORMAT_URI
         self.delete_tmpfiles = True
+        self.signing_algorithm = None
+        self.digest_algorithm = None
 
     def setattr(self, context, attr, val):
         if context == "":

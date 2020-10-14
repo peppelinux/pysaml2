@@ -181,6 +181,9 @@ class Base(Entity):
 
             setattr(self, attr, val)
 
+        for algorithm in ('signing_algorithm', 'digest_algorithm'):
+            setattr(self, algorithm, self.config.getattr(algorithm, "sp"))
+
         if self.entity_type == "sp" and not any(
             [
                 self.want_assertions_signed,

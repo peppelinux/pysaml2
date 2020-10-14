@@ -595,6 +595,9 @@ class Server(Entity):
         except KeyError:
             args['best_effort'] = False
 
+        for algorithm in ('signing_algorithm', 'digest_algorithm'):
+            setattr(self, algorithm, self.config.getattr(algorithm, "idp"))
+
         for param in ['sign_assertion', 'sign_response', 'encrypt_assertion',
                       'encrypt_assertion_self_contained',
                       'encrypted_advice_attributes', 'encrypt_cert_advice',
