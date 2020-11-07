@@ -62,8 +62,9 @@ logger = logging.getLogger(__name__)
 SIG = '{{{ns}#}}{attribute}'.format(ns=ds.NAMESPACE, attribute='Signature')
 
 RSA_1_5 = 'http://www.w3.org/2001/04/xmlenc#rsa-1_5'
+RSA_OAEP = "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"
 TRIPLE_DES_CBC = 'http://www.w3.org/2001/04/xmlenc#tripledes-cbc'
-
+AES128_GCM="http://www.w3.org/2001/04/xmlenc#aes128-cbc"
 
 class SigverError(SAMLError):
     pass
@@ -735,7 +736,7 @@ class CryptoBackendXmlSec1(CryptoBackend):
             (_stdout, _stderr, output) = self._run_xmlsec(com_list, [template])
         except XmlsecError as e:
             six.raise_from(EncryptError(com_list), e)
-
+        
         return output
 
     def encrypt_assertion(self, statement, enc_key, template, key_type='des-192', node_xpath=None, node_id=None):
@@ -778,8 +779,14 @@ class CryptoBackendXmlSec1(CryptoBackend):
             (_stdout, _stderr, output) = self._run_xmlsec(com_list, [tmp2.name])
         except XmlsecError as e:
             six.raise_from(EncryptError(com_list), e)
-
-        return output.decode('utf-8')
+        
+        import re
+        regexp = '<xenc:CipherValue>[a-zA-Z0-9\/\=\_\+\n]*</xenc:CipherValue>'
+        penc = re.findall(regexp, output.decode())[0]
+        penc = penc.replace('\n', '')
+        res = re.sub(regexp, penc, output.decode())
+        
+        return res
 
     def decrypt(self, enctext, key_file):
         """
@@ -1841,8 +1848,9 @@ def pre_signature_part(ident, public_key=None, identifier=None, digest_alg=None,
 # </EncryptedData>
 
 
-def pre_encryption_part(msg_enc=TRIPLE_DES_CBC, key_enc=RSA_1_5, key_name='my-rsa-key',
-        encrypted_key_id=None, encrypted_data_id=None):
+def pre_encryption_part(msg_enc=TRIPLE_DES_CBC, key_enc=RSA_OAEP, 
+                        key_name='my-rsa-key',
+                        encrypted_key_id=None, encrypted_data_id=None):
     """
 
     :param msg_enc:
