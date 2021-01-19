@@ -196,7 +196,7 @@ class AttributeValueBase(SamlBase):
             'date': {
                 'type': datetime.date,
                 'to_type': lambda x: datetime.datetime.strptime(x, '%Y-%m-%d').date(),
-                'to_text': _str,
+                'to_text': str,
             },
             'integer': {
                 'type': int,
