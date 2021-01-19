@@ -33,6 +33,7 @@ COMMON_ARGS = [
     "logging",
     "debug",
     "entityid",
+    "xmlsec_disabled_algs",
     "xmlsec_binary",
     "key_file",
     "cert_file",
@@ -171,6 +172,7 @@ class Config(object):
         self.logging = None
         self._homedir = homedir
         self.entityid = None
+        self.xmlsec_disabled_algs = []
         self.xmlsec_binary = None
         self.xmlsec_path = []
         self.debug = False
